@@ -3271,6 +3271,8 @@ class StandardLoggingMCPToolCall(TypedDict, total=False):
     Records which upstream received a relayed request; never a credential.
     """
 
+    mcp_auth_profile: ReadOnly[str]
+
 
 class StandardLoggingVectorStoreRequest(TypedDict, total=False):
     """

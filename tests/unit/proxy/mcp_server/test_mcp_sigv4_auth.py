@@ -1011,7 +1011,7 @@ class TestRotateCredentials:
     """Test rotate_mcp_server_credentials_master_key decrypts before re-encrypting."""
 
     @pytest.mark.asyncio
-    async def test_rotation_decrypts_then_reencrypts(self):
+    async def test_rotation_decrypts_then_reencrypts(self) -> None:
         """Key rotation should decrypt with old key then encrypt with new key."""
         from litellm.proxy.mcp_server.db import (
             rotate_mcp_server_credentials_master_key,
@@ -1031,6 +1031,7 @@ class TestRotateCredentials:
         mock_prisma.db.litellm_config.find_unique = AsyncMock(return_value=None)
         mock_prisma.db.litellm_mcpservertable.update = AsyncMock()
         mock_prisma.db.litellm_mcpserveroauthclient.find_many = AsyncMock(return_value=[])
+        mock_prisma.writer_db.litellm_mcpauthprofiletable.find_many = AsyncMock(return_value=[])
 
         with (
             patch(
@@ -1060,7 +1061,7 @@ class TestRotateCredentials:
         assert stored_creds["aws_region_name"] == "us-east-1"
 
     @pytest.mark.asyncio
-    async def test_rotation_reencrypts_global_env_vars(self):
+    async def test_rotation_reencrypts_global_env_vars(self) -> None:
         """Global env var values are re-encrypted under the new key; user-scope
         placeholders are left untouched."""
         from litellm.proxy.mcp_server.db import (
@@ -1080,6 +1081,7 @@ class TestRotateCredentials:
         mock_prisma.db.litellm_config.find_unique = AsyncMock(return_value=None)
         mock_prisma.db.litellm_mcpservertable.update = AsyncMock()
         mock_prisma.db.litellm_mcpserveroauthclient.find_many = AsyncMock(return_value=[])
+        mock_prisma.writer_db.litellm_mcpauthprofiletable.find_many = AsyncMock(return_value=[])
 
         with (
             patch(
@@ -1193,3 +1195,47 @@ class TestInheritCredentials:
         assert result.credentials["aws_session_token"] == "TOKEN"
         assert result.credentials["aws_region_name"] == "us-east-1"
         assert result.credentials["aws_service_name"] == "bedrock-agentcore"
+
+
+@pytest.mark.asyncio
+async def test_rotating_profile_credentials_reads_the_writer_and_moves_the_owning_server_rows() -> None:  # test-quality-ok: the database writes are the behavior under test  # fmt: skip
+    from types import SimpleNamespace
+
+    from litellm.proxy.mcp_server.db import rotate_mcp_server_credentials_master_key
+
+    profiles: Final = [
+        SimpleNamespace(profile_id=profile_id, server_id=server_id, credentials='{"auth_value": "enc_old:t"}')
+        for profile_id, server_id in (("a-bots", "srv-a"), ("a-nightly", "srv-a"), ("b-bots", "srv-b"))
+    ]
+    mock_prisma: Final = MagicMock()
+    mock_prisma.db.litellm_mcpservertable.find_many = AsyncMock(return_value=[])
+    mock_prisma.db.litellm_config.find_unique = AsyncMock(return_value=None)
+    mock_prisma.db.litellm_mcpservertable.update = AsyncMock()
+    mock_prisma.db.litellm_mcpserveroauthclient.find_many = AsyncMock(return_value=[])
+    mock_prisma.db.litellm_mcpauthprofiletable.find_many = AsyncMock(return_value=[])
+    mock_prisma.writer_db.litellm_mcpauthprofiletable.find_many = AsyncMock(return_value=profiles)
+    mock_prisma.writer_db.litellm_mcpauthprofiletable.update = AsyncMock()
+
+    def decrypt(value: str, key: str, exception_type: str = "error", return_original_value: bool = False) -> str:
+        return value.replace("enc_old:", "")
+
+    def encrypt(value: str, new_encryption_key: str) -> str:
+        return f"enc_new:{value}"
+
+    with (
+        patch("litellm.proxy.mcp_server.db.decrypt_value_helper", side_effect=decrypt),
+        patch("litellm.proxy.mcp_server.db.encrypt_value_helper", side_effect=encrypt),
+    ):
+        await rotate_mcp_server_credentials_master_key(mock_prisma, "admin", "new-key")
+
+    assert [
+        (call.kwargs["where"], json.loads(call.kwargs["data"]["credentials"]), call.kwargs["data"]["updated_by"])
+        for call in mock_prisma.writer_db.litellm_mcpauthprofiletable.update.await_args_list
+    ] == [
+        ({"profile_id": profile_id}, {"auth_value": "enc_new:t"}, "admin")
+        for profile_id in ("a-bots", "a-nightly", "b-bots")
+    ]
+    assert [call.kwargs for call in mock_prisma.db.litellm_mcpservertable.update.await_args_list] == [
+        {"where": {"server_id": "srv-a"}, "data": {"updated_by": "admin"}},
+        {"where": {"server_id": "srv-b"}, "data": {"updated_by": "admin"}},
+    ]

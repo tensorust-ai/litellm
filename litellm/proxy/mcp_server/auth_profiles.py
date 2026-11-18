@@ -8,7 +8,7 @@ from pydantic import TypeAdapter, ValidationError
 from typing_extensions import assert_never
 
 from litellm.types.mcp import MCPAuth, MCPTransport
-from litellm.types.mcp_server.mcp_server_manager import MCPAuthProfile
+from litellm.types.mcp_server.mcp_server_manager import MCPAuthProfile, MCPServer
 
 PROFILE_ID_PATTERN: Final = re.compile(r"[A-Za-z0-9_-]{1,64}")
 RESERVED_PROFILE_ID: Final = "default"
@@ -170,6 +170,8 @@ def _first_duplicate(claims: Sequence[_Claim]) -> DuplicateProfileId | None:
 def validate_auth_profiles(
     submitted: Mapping[str, object],
     existing: Iterable[StoredProfileId],
+    *,
+    config_claims: Iterable[StoredProfileId] = (),
 ) -> ValidatedProfiles | AuthProfileRefusal:
     parsed: Final = tuple(_parsed_profiles(submitted))
     refusal: Final = _first_refusal(result for _, result in parsed)
@@ -181,10 +183,13 @@ def validate_auth_profiles(
             for server in submitted
         }
     )
-    kept: Final = tuple(
-        _Claim(stored.profile_id.lower(), stored.profile_id, stored.server)
-        for stored in existing
-        if stored.server not in by_server
+    kept: Final = (
+        *(_Claim(claim.profile_id.lower(), claim.profile_id, claim.server) for claim in config_claims),
+        *(
+            _Claim(stored.profile_id.lower(), stored.profile_id, stored.server)
+            for stored in existing
+            if stored.server not in by_server
+        ),
     )
     submitted_claims: Final = tuple(
         _Claim(result.id.lower(), result.id, owner) for owner, result in parsed if isinstance(result, MCPAuthProfile)
@@ -223,6 +228,12 @@ def profile_host_refusal(
     if spec_path:
         return UnsupportedProfileHost(server, "OpenAPI")
     return None
+
+
+def stored_profile_ids(servers: Iterable[MCPServer]) -> Iterator[StoredProfileId]:
+    for server in servers:
+        for profile in server.additional_auth or ():
+            yield StoredProfileId(profile.id, server.server_name or server.server_id)
 
 
 def describe_refusal(refusal: AuthProfileRefusal) -> str:

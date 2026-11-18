@@ -53532,8 +53532,15 @@ export interface components {
             /** User Id */
             user_id?: string | null;
         };
-        /** UpdateMCPServerRequest */
-        UpdateMCPServerRequest: {
+        /** UpdateMCPServerWithProfilesRequest */
+        UpdateMCPServerWithProfilesRequest: {
+            /**
+             * Additional Auth
+             * @description Replaces the server's extra upstream auth profiles. A profile keeps its stored secrets when it omits them, and an empty list or null removes all of them. Omit the field to keep them.
+             */
+            additional_auth?: {
+                [key: string]: unknown;
+            }[] | null;
             /** Alias */
             alias?: string | null;
             /**
@@ -88941,7 +88948,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateMCPServerRequest"];
+                "application/json": components["schemas"]["UpdateMCPServerWithProfilesRequest"];
             };
         };
         responses: {

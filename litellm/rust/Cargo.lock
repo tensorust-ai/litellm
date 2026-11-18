@@ -3848,6 +3848,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "litellm-callbacks-spend-log"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "fancy-regex 0.19.2",
+ "litellm-python-compat",
+ "litellm-tracing",
+ "num-traits",
+ "regex",
+ "rstest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "litellm-circuit-breaker"
 version = "0.1.0"
 dependencies = [
@@ -4625,6 +4642,7 @@ dependencies = [
  "litellm-callbacks-parallel-request-limiter",
  "litellm-callbacks-python",
  "litellm-callbacks-s3-log",
+ "litellm-callbacks-spend-log",
  "litellm-circuit-breaker",
  "litellm-config",
  "litellm-core-utils",

@@ -87,6 +87,7 @@ from litellm.proxy._types import (
     SpendLogsRouterMetadata,
 )
 from litellm.proxy.route_llm_request import GENERATE_CONTENT_SPEND_ENDPOINTS, ProxyModelNotFoundError
+from litellm.proxy.spend_tracking.rust_spend_log_rows import rust_logging_payload, uses_spend_logs_ledger
 from litellm.proxy.spend_tracking.spend_log_error_logger import spend_log_error
 from litellm.proxy.utils import PrismaClient, hash_token, query_raw_within_statement_timeout
 from litellm.responses.litellm_completion_transformation.compaction_items import (
@@ -739,6 +740,9 @@ def get_logging_payload(
 ) -> SpendLogsPayload:
     if kwargs is None:
         kwargs = {}
+
+    if uses_spend_logs_ledger():
+        return rust_logging_payload(kwargs, response_obj, start_time, end_time, llm_router)  # pyright: ignore[reportUnknownArgumentType]  # the logging kwargs dict is untyped upstream
 
     row_kwargs: Final = _CUSTOMER_METADATA_ADAPTER.validate_python(kwargs)
     rejected_as_unknown_model: Final = isinstance(response_obj, ProxyModelNotFoundError)

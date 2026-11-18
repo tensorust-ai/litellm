@@ -1972,6 +1972,36 @@ class NativeTokenRedactor:
     def redact(self, text: str, replacement: str) -> str | None: ...
 
 @final
+class RustSpendLogRowBuilder:
+    def __new__(
+        cls,
+        *,
+        token_redactor: NativeTokenRedactor,
+        latest_turn_only: bool,
+        redact_tokens: bool,
+        drop_requester_ip_address: bool,
+        omit_missing_session_id: bool,
+        max_string_length_prompt_in_db: int,
+        disable_end_user_cost_tracking: bool,
+        request_correlation_in_logs: bool,
+        turn_off_message_logging: bool,
+    ) -> RustSpendLogRowBuilder: ...
+    def build_row(self, input_json: bytes) -> dict[str, object]: ...
+    @staticmethod
+    def ledger_columns(
+        row: Mapping[str, object],
+        *,
+        billable_cost: float | None,
+        org_id: str | None,
+        team_id: str | None,
+        delivery_id: str,
+        entities: Sequence[tuple[str, str | None]],
+        model_access_groups: Sequence[str],
+        windows: Sequence[Mapping[str, object]],
+        savings: Mapping[str, float],
+    ) -> dict[str, object]: ...
+
+@final
 class NativeDiagnosticProcessor:
     def __new__(cls, minimum_custom_key_length: int) -> NativeDiagnosticProcessor: ...
     def redact_text(self, text: str) -> str: ...
@@ -2273,6 +2303,7 @@ __all__ = [
     "RustOrganizationRepository",
     "RustPlan",
     "RustProjectRepository",
+    "RustSpendLogRowBuilder",
     "RustTagRepository",
     "RustTeamGrant",
     "RustTeamMembershipRepository",

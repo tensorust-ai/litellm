@@ -1,3 +1,5 @@
+//! Python truthiness: `bool(value)` and the `a or b` operator over [`Value`].
+
 use num_bigint::Sign;
 
 use crate::Value;
@@ -28,4 +30,9 @@ pub fn json_truthy(value: &serde_json::Value) -> bool {
         serde_json::Value::Array(values) => !values.is_empty(),
         serde_json::Value::Object(entries) => !entries.is_empty(),
     }
+}
+
+/// `first or second`: the first value when it is truthy, else the second.
+pub fn or<'a>(first: &'a Value, second: &'a Value) -> &'a Value {
+    if truthy(first) { first } else { second }
 }

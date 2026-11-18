@@ -17,7 +17,7 @@ use serde_json::{Map, Value};
 
 use crate::db::NativeDatabase;
 
-type RetentionFields = (Option<Vec<String>>, Option<Vec<String>>);
+pub(crate) type RetentionFields = (Option<Vec<String>>, Option<Vec<String>>);
 
 /// The fields of a written log that `process_spend_logs_guardrail_usage` reads, for a log whose
 /// metadata carries guardrail results.
@@ -67,6 +67,13 @@ fn map_pass_error(error: PassError) -> PyErr {
 #[pyclass(frozen, name = "RustSpendLogWriter")]
 pub struct RustSpendLogWriter {
     writer: Arc<SpendLogWriter<PgLedgerStore>>,
+}
+
+impl RustSpendLogWriter {
+    /// The installed writer, for the Rust spend logger that enqueues rows into it.
+    pub(crate) fn shared(&self) -> Arc<SpendLogWriter<PgLedgerStore>> {
+        Arc::clone(&self.writer)
+    }
 }
 
 #[pymethods]

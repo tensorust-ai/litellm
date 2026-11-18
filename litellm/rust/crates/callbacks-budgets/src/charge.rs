@@ -351,9 +351,9 @@ fn settled_stamps(
 }
 
 /// The counters a reservation holds, each with the key its entry carries, in entry order.
-type Held = Vec<(String, SpendCounter)>;
+pub(crate) type Held = Vec<(String, SpendCounter)>;
 
-fn held_counters(reservation: &BudgetReservation) -> Held {
+pub(crate) fn held_counters(reservation: &BudgetReservation) -> Held {
     let mut seen = HashSet::new();
     reservation
         .entries
@@ -383,7 +383,7 @@ struct Reconciled {
 
 /// `reseed_reserved_counter`: raise a counter the reconcile found inconsistent to its stored spend,
 /// then charge it the settled cost.
-async fn reseed_reserved(
+pub(crate) async fn reseed_reserved(
     store: &SpendCounters,
     host: &Host,
     held: &Held,

@@ -44,7 +44,9 @@ use std::sync::Arc;
 
 use litellm_tracing::TokenRedactor;
 
-pub use accounting::{AccountingSavings, AccountingWindow, LedgerColumns, LedgerInput};
+pub use accounting::{
+    AccountingSavings, AccountingWindow, LedgerColumns, LedgerInput, guardrail_information_cost,
+};
 pub use input::RowInput;
 pub use row::{SpendLogRow, SpendLogStatus};
 

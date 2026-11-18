@@ -447,6 +447,142 @@ def _attempt_spend_row_kwargs(
     return row
 
 
+def _failure_route_is_trackable(request_route: str | None, request_fields: Mapping[str, object]) -> bool:
+    from litellm.proxy.pass_through_endpoints.pass_through_endpoints import InitPassThroughEndpointHelpers
+
+    return (
+        request_route is None
+        or RouteChecks.runs_inference_checks(request_route)
+        or RouteChecks.is_info_route(route=request_route)
+        or InitPassThroughEndpointHelpers.has_configured_route_ignoring_trailing_slash(route=request_route)
+        or request_fields.get(GUARDRAIL_ENDPOINT_FAILURE_KEY) is GUARDRAIL_ENDPOINT_FAILURE
+    )
+
+
+def tracks_failure_spend(
+    request_data: Mapping[str, object],
+    original_exception: Exception,
+    user_api_key_dict: UserAPIKeyAuth,
+    completed_cost: bool,
+) -> bool:
+    request_route: Final = user_api_key_dict.request_route
+    request_fields: Final = _str_keyed_fields(request_data)
+    return not (
+        request_fields.get(FAILURE_ROW_ALREADY_WRITTEN_KEY) is FAILURE_ROW_ALREADY_WRITTEN
+        or ProxyDBLogger._should_track_errors_in_db() is False  # pyright: ignore[reportPrivateUsage]  # the failure writer's own setting read
+        and not completed_cost
+        or ProxyDBLogger._skips_pre_routing_rejections()  # pyright: ignore[reportPrivateUsage]  # the failure writer's own setting read
+        and is_pre_routing_rejection(original_exception, _REQUEST_DATA.validate_python(request_data))
+        or not _failure_route_is_trackable(request_route, request_fields)
+        or request_route is not None
+        and RouteChecks.is_dashboard_session_info_route(request_route, user_api_key_dict.team_id)
+    )
+
+
+def _failure_metadata(
+    user_api_key_dict: UserAPIKeyAuth, original_exception: Exception, traceback_str: str | None
+) -> Mapping[str, object]:
+    error_information: Final = StandardLoggingPayloadSetup.get_error_information(
+        original_exception=original_exception, traceback_str=traceback_str
+    )
+    return {
+        **LiteLLMProxyRequestSetup.get_sanitized_user_information_from_key(user_api_key_dict=user_api_key_dict),
+        "user_api_key": LiteLLMProxyRequestSetup.get_logged_api_key(user_api_key_dict),
+        **LiteLLMProxyRequestSetup.get_tenant_logging_metadata(user_api_key_dict),
+        "status": "failure",
+        "error_information": {
+            key: value
+            for key, value in error_information.items()
+            if key != "traceback" or not should_suppress_spend_log_tracebacks()
+        },
+    }
+
+
+def _failure_spend_request(
+    request_data: Mapping[str, object], metadata: Mapping[str, object], request_route: str | None
+) -> Mapping[str, object]:
+    litellm_metadata: Final = _str_keyed_fields(request_data.get("litellm_metadata"))
+    stamped: Final = {
+        **_str_keyed_fields(request_data.get("metadata")),
+        **_routed_metadata_fallback(request_data),
+        **_proxy_stamped_request_fields(request_data, request_route),
+        **metadata,
+        "used_client_oauth_token": _proxy_stamped_used_client_oauth_token(request_data, request_route),
+    }
+    with_guardrails: Final = {
+        **stamped,
+        **_guardrail_info_lifted_from_litellm_metadata(
+            litellm_metadata, guardrail_info_already_set="standard_logging_guardrail_information" in stamped
+        ),
+    }
+    params: Final = _str_keyed_fields(request_data.get("litellm_params"))
+    params_metadata: Final = _str_keyed_fields(params.get("metadata"))
+    existing: Final = {**with_guardrails, **({"tags": params_metadata["tags"]} if params_metadata.get("tags") else {})}
+    logging_obj: Final = request_data.get("litellm_logging_obj")
+    return {
+        **request_data,
+        "litellm_params": {
+            **params,
+            "proxy_server_request": request_data.get("proxy_server_request")
+            or params.get("proxy_server_request")
+            or {},
+            "metadata": {
+                **existing,
+                **_redaction_opt_in_lifted_from_litellm_metadata(
+                    litellm_metadata, caller_set_headers="headers" in existing
+                ),
+            },
+        },
+        "metadata": existing,
+        "model": request_data["model"] if "model" in request_data else params.get("model") or "",
+        "custom_llm_provider": request_data["custom_llm_provider"]
+        if "custom_llm_provider" in request_data
+        else params.get("custom_llm_provider") or "",
+        "standard_logging_object": request_data.get("standard_logging_object")
+        or (
+            None
+            if logging_obj is None
+            else _str_keyed_fields(getattr(logging_obj, "model_call_details", {})).get("standard_logging_object")
+        ),
+        "litellm_trace_id": request_data.get("litellm_trace_id")
+        if request_data.get("litellm_trace_id") is not None or logging_obj is None
+        else getattr(logging_obj, "litellm_trace_id", None),
+    }
+
+
+def failure_spend_start_time(request_data: Mapping[str, object]) -> datetime:
+    lifted: Final = request_data.get("start_time")
+    if isinstance(lifted, datetime):
+        return lifted
+    started: Final = getattr(request_data.get("litellm_logging_obj"), "start_time", None)
+    return started if isinstance(started, datetime) else datetime.now()
+
+
+def failure_spend_rows(
+    request_data: Mapping[str, object],
+    original_exception: Exception,
+    user_api_key_dict: UserAPIKeyAuth,
+    traceback_str: str | None,
+) -> tuple[Mapping[str, object], ...]:
+    built: Final = _failure_spend_request(
+        request_data,
+        _failure_metadata(user_api_key_dict, original_exception, traceback_str),
+        user_api_key_dict.request_route,
+    )
+    return tuple(
+        row
+        for _, row in _failure_spend_rows(
+            built,
+            failure_row_response_cost(request_data),
+            _failure_snapshot_with_guardrails_recorded_after_it(
+                built.get("standard_logging_object"),
+                _str_keyed_fields(built.get("metadata")).get("standard_logging_guardrail_information"),
+            ),
+            _proxy_deployment,
+        )
+    )
+
+
 class _ProxyDBLogger(CustomLogger):
     def __init__(
         self,
@@ -525,25 +661,7 @@ class _ProxyDBLogger(CustomLogger):
 
         request_route: Final = user_api_key_dict.request_route
         request_fields: Final = _str_keyed_fields(request_data)
-        from litellm.proxy.pass_through_endpoints.pass_through_endpoints import InitPassThroughEndpointHelpers
-
-        route_is_trackable: Final = (
-            request_route is None
-            or RouteChecks.runs_inference_checks(request_route)
-            or RouteChecks.is_info_route(route=request_route)
-            or InitPassThroughEndpointHelpers.has_configured_route_ignoring_trailing_slash(route=request_route)
-            or request_fields.get(GUARDRAIL_ENDPOINT_FAILURE_KEY) is GUARDRAIL_ENDPOINT_FAILURE
-        )
-        if (
-            request_fields.get(FAILURE_ROW_ALREADY_WRITTEN_KEY) is FAILURE_ROW_ALREADY_WRITTEN
-            or ProxyDBLogger._should_track_errors_in_db() is False
-            and not completed_cost
-            or ProxyDBLogger._skips_pre_routing_rejections()
-            and is_pre_routing_rejection(original_exception, _REQUEST_DATA.validate_python(request_data))
-            or not route_is_trackable
-            or request_route is not None
-            and RouteChecks.is_dashboard_session_info_route(request_route, user_api_key_dict.team_id)
-        ):
+        if not tracks_failure_spend(request_data, original_exception, user_api_key_dict, completed_cost):
             return
 
         _metadata = dict(

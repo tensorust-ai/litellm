@@ -31,7 +31,7 @@ impl PySpendRead {
 
 /// Whether every increment one `increment_many_post_call` declared has its reply.
 #[pyclass(frozen, name = "PostCallSettlement")]
-pub(crate) struct PyPostCallSettlement(PostCallSettlement);
+pub(crate) struct PyPostCallSettlement(pub(crate) PostCallSettlement);
 
 #[pymethods]
 impl PyPostCallSettlement {

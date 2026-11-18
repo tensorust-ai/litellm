@@ -1039,6 +1039,7 @@ from litellm.proxy.spend_tracking.committed_spend import (
     is_committed_spend_key,
     seed_committed_spend,
 )
+from litellm.proxy.spend_tracking.rust_spend_counters import charge_spend_counters
 from litellm.proxy.spend_tracking.spend_capture_rate import (
     run_scheduled_spend_capture_rate_check,
 )
@@ -3817,6 +3818,7 @@ async def increment_spend_counters(
     committed_spend_scope: EntitySpendCounterKeys | None = None,
     windows_from_ledger: bool = False,
     customer_counters: Sequence[BudgetCounter] = (),
+    customer_hierarchy: object = None,
 ):
     """
     Atomically increment spend counters for budget enforcement.
@@ -3827,7 +3829,27 @@ async def increment_spend_counters(
 
     Awaited (not create_task) in the cost callback, so the counter is
     updated before the next request's auth check runs.
+
+    With the ledger the whole step runs in Rust, the customer hierarchy in
+    ``customer_hierarchy`` settled first.
     """
+    if windows_from_ledger:
+        await charge_spend_counters(
+            token=token,
+            team_id=team_id,
+            user_id=user_id,
+            response_cost=response_cost,
+            org_id=org_id,
+            budget_reservation=budget_reservation,
+            end_user_id=end_user_id,
+            tags=tags,
+            model_access_groups=model_access_groups,
+            project_id=project_id,
+            committed_spend_scope=committed_spend_scope,
+            customer_counters=customer_counters,
+            customer_hierarchy=customer_hierarchy,
+        )
+        return
     with spend_counter_batch_scope(
         spend_counter_store,
         counter_keys=post_call_counter_keys(

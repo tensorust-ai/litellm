@@ -6971,7 +6971,7 @@ class TestGatewayCreateInitializationOptions:
 
 
 @pytest.mark.asyncio
-async def test_list_tools_with_legacy_db_m2m_server_resolves_oauth2_flow():
+async def test_list_tools_with_legacy_db_m2m_server_resolves_oauth2_flow() -> None:
     """
     P1 Regression: list_tools path must apply _resolve_oauth2_flow to legacy DB
     rows where oauth2_flow is NULL but M2M credentials are present.
@@ -7053,6 +7053,7 @@ async def test_list_tools_with_legacy_db_m2m_server_resolves_oauth2_flow():
     ):
         mock_manager.get_allowed_mcp_servers = AsyncMock(return_value=["legacy-m2m-id"])
         mock_manager.get_mcp_server_by_id = MagicMock(return_value=legacy_server)
+        mock_manager.auth_profile_grants = AsyncMock(return_value=())
         mock_manager.filter_server_ids_by_ip_with_info = MagicMock(return_value=(["legacy-m2m-id"], 0))
         mock_manager.get_tools_from_server = AsyncMock(side_effect=capture_extra_headers)
 

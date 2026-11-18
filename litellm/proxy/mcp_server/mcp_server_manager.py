@@ -2217,6 +2217,7 @@ class MCPServerManager:
         per_user_oauth_token_store: InvalidatableOAuthTokenStore | None = None,
         per_user_token_cache: MCPPerUserTokenCache | None = None,
         discovery_clock: Callable[[], float] = time.monotonic,
+        catalog_clock: Callable[[], float] = time.monotonic,
         upstream_transport: httpx2.AsyncBaseTransport | None = None,
         auth_profile_grants: AuthProfileGrantSource = no_auth_profile_grants,
         auth_profile_owners: AuthProfileOwnerSource | None = None,
@@ -2253,7 +2254,7 @@ class MCPServerManager:
         self._tools_list_cache_ttl = _mcp_tools_list_cache_ttl()
         from litellm.proxy.mcp_server.catalog import CatalogSnapshots
 
-        self.catalog = CatalogSnapshots(self)
+        self.catalog = CatalogSnapshots(self, clock=catalog_clock)
         self.registry: dict[str, MCPServer] = {}
         self._upstream_sessions: dict[_UpstreamSessionKey, PersistentMCPSession] = {}  # mutable-ok: session registry
         self._retiring_upstream_sessions: list[tuple[str, PersistentMCPSession]] = []  # mutable-ok: session registry

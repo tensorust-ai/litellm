@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(spend), 0) AS \"spend!\"\nFROM \"LiteLLM_SpendLogs\"\nWHERE api_key = $1\n  AND \"startTime\" >= $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spend!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "96c0ad64e92db0c1c987513f73a9a5ac3b0ed23c86b368117a2a821493cccb83"
+}

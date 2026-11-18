@@ -1,5 +1,6 @@
 from asyncio import Future
 from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from typing import (
     ClassVar,
     Final,
@@ -1878,6 +1879,24 @@ class NativeDatabase:
     def close(self) -> Future[None]: ...
 
 @final
+class RustSpendLogWriter:
+    def __new__(
+        cls,
+        database: NativeDatabase,
+        *,
+        queue_max_bytes: int,
+        write_batch_max_bytes: int,
+        write_batch_max_rows: int,
+        on_flush_request: Callable[[], None],
+    ) -> RustSpendLogWriter: ...
+    def enqueue(self, rows: Sequence[str], at_head: bool, max_bytes: int) -> int: ...
+    def flush(
+        self, limit: int, retention: tuple[Sequence[str] | None, Sequence[str] | None] | None = None
+    ) -> Future[list[dict[str, object]]]: ...
+    def dequeue(self, limit: int) -> list[str]: ...
+    def __len__(self) -> int: ...
+
+@final
 class RustKeyRepository:
     def __new__(cls, database: NativeDatabase) -> RustKeyRepository: ...
     def find(self, token: str, *, use_writer: bool = False) -> Future[str | None]: ...
@@ -1947,6 +1966,13 @@ class RustOrganizationRepository:
 class RustProjectRepository:
     def __new__(cls, database: NativeDatabase) -> RustProjectRepository: ...
     def find_with_budget(self, project_id: str) -> Future[str | None]: ...
+
+@final
+class RustSpendLogRepository:
+    def __new__(cls, database: NativeDatabase) -> RustSpendLogRepository: ...
+    def key_window_spend(self, api_key: str, since: datetime) -> Future[float]: ...
+    def team_window_spend(self, team_id: str, since: datetime) -> Future[float]: ...
+    def user_window_spend(self, user_id: str, since: datetime) -> Future[float]: ...
 
 @final
 class RustTagRepository:
@@ -2303,7 +2329,9 @@ __all__ = [
     "RustOrganizationRepository",
     "RustPlan",
     "RustProjectRepository",
+    "RustSpendLogRepository",
     "RustSpendLogRowBuilder",
+    "RustSpendLogWriter",
     "RustTagRepository",
     "RustTeamGrant",
     "RustTeamMembershipRepository",

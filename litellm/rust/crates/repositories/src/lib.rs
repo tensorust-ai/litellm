@@ -1,6 +1,8 @@
-//! Rust repositories for the auth objects the proxy reads from Postgres when its auth cache misses.
+//! Rust repositories for the objects the proxy reads from Postgres: the auth objects it reads when its auth cache
+//! misses, and the spend log sums it reseeds cold budget window counters from. The spend log repository also writes
+//! the spend logs and their ledger deliveries.
 //!
-//! Each repository is a folder that owns its queries, the shaping of their rows into what the auth flow consumes,
+//! Each repository is a folder that owns its queries, the shaping of their rows into what their callers consume,
 //! and any memory tier private to that object. Queries are private to their folder, so every read goes through a
 //! repository and its `Database::run`. The shared auth cache in front of them stays with the host. See README.md
 //! for the layout.
@@ -21,6 +23,7 @@ mod object_permission;
 mod organization;
 mod project;
 mod raw_json;
+mod spend_log;
 mod tag;
 mod team;
 mod team_membership;
@@ -40,6 +43,9 @@ pub use object_permission::{ObjectPermission, ObjectPermissionRepository};
 pub use organization::{Organization, OrganizationRepository};
 pub use project::{Project, ProjectRepository};
 use raw_json::RawJson;
+pub use spend_log::{
+    SpendLogDelivery, SpendLogOwner, SpendLogRecord, SpendLogRepository, SpendLogWrite,
+};
 pub use tag::{Tag, TagRepository};
 pub use team::{Team, TeamRepository};
 pub use team_membership::{TeamMembership, TeamMembershipRepository};

@@ -1595,7 +1595,7 @@ async def test_register_client_persist_discriminator_oauth2_persists():
 
 
 @pytest.mark.asyncio
-async def test_register_client_persists_only_to_its_own_row_when_another_server_shares_the_url():
+async def test_register_client_persists_only_to_its_own_row_when_another_server_shares_the_url() -> None:
     """A fresh server must mint and persist its OWN DCR client even when another server row with
     the same upstream URL already holds one: both the reuse lookup and the persist are keyed by
     server_id, never by URL, so OAuth client identity is not transferable between server entries.
@@ -1654,7 +1654,7 @@ async def test_register_client_persists_only_to_its_own_row_when_another_server_
             return_value=mock_async_client,
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
-        patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(side_effect=_get_row)),
+        patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(side_effect=_get_row)),
         patch("litellm.proxy.mcp_server.db.update_mcp_server", new=mock_update),
         patch.object(global_mcp_server_manager, "update_server", new=AsyncMock()),
     ):
@@ -1753,7 +1753,7 @@ async def test_register_client_does_not_clobber_token_url_when_absent():
 
 
 @pytest.mark.asyncio
-async def test_register_client_reuses_persisted_client_id_for_non_admin_when_registry_is_stale():
+async def test_register_client_reuses_persisted_client_id_for_non_admin_when_registry_is_stale() -> None:
     try:
         from fastapi import Request
 
@@ -1802,7 +1802,7 @@ async def test_register_client_reuses_persisted_client_id_for_non_admin_when_reg
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch(
@@ -1829,7 +1829,7 @@ async def test_register_client_reuses_persisted_client_id_for_non_admin_when_reg
 
 
 @pytest.mark.asyncio
-async def test_register_client_reuse_refreshes_request_server_when_manager_update_fails():
+async def test_register_client_reuse_refreshes_request_server_when_manager_update_fails() -> None:
     try:
         from fastapi import Request
 
@@ -1881,7 +1881,7 @@ async def test_register_client_reuse_refreshes_request_server_when_manager_updat
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch.object(global_mcp_server_manager, "update_server", new=mock_update_server),
@@ -1906,7 +1906,7 @@ async def test_register_client_reuse_refreshes_request_server_when_manager_updat
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("late_winner", [False, True])
-async def test_register_client_returns_reused_client_when_concurrent_persist_wins(late_winner):
+async def test_register_client_returns_reused_client_when_concurrent_persist_wins(late_winner: bool) -> None:
     try:
         from fastapi import Request
 
@@ -1962,7 +1962,7 @@ async def test_register_client_returns_reused_client_when_concurrent_persist_win
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch(
@@ -2012,7 +2012,7 @@ def _dcr_redirect_test_server(client_id):
 
 
 @pytest.mark.asyncio
-async def test_register_client_re_registers_when_persisted_redirect_uri_no_longer_matches_origin():
+async def test_register_client_re_registers_when_persisted_redirect_uri_no_longer_matches_origin() -> None:
     """A persisted DCR client is bound to the redirect_uri it was registered with. When the
     proxy's resolved public origin changes, every authorize built for the reused client is
     rejected IdP-side and the server is permanently stranded (GH #32473). A positive mismatch
@@ -2064,7 +2064,7 @@ async def test_register_client_re_registers_when_persisted_redirect_uri_no_longe
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch(
@@ -2099,7 +2099,7 @@ async def test_register_client_re_registers_when_persisted_redirect_uri_no_longe
 
 
 @pytest.mark.asyncio
-async def test_register_client_grandfathers_persisted_client_without_recorded_redirect_uris():
+async def test_register_client_grandfathers_persisted_client_without_recorded_redirect_uris() -> None:
     """Clients persisted before redirect_uris were recorded (and admin-configured clients,
     which never get a recording) have nothing to compare against; treating that as a mismatch
     would re-mint a client_id for every existing install on upgrade and orphan all users'
@@ -2135,7 +2135,7 @@ async def test_register_client_grandfathers_persisted_client_without_recorded_re
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch(
@@ -2160,7 +2160,7 @@ async def test_register_client_grandfathers_persisted_client_without_recorded_re
 
 
 @pytest.mark.asyncio
-async def test_register_client_keeps_persisted_client_when_recorded_redirect_uri_matches_origin():
+async def test_register_client_keeps_persisted_client_when_recorded_redirect_uri_matches_origin() -> None:
     """When the recorded redirect_uris still cover the current callback the persisted client
     is valid; re-registering would orphan refresh tokens for no reason."""
     try:
@@ -2196,7 +2196,7 @@ async def test_register_client_keeps_persisted_client_when_recorded_redirect_uri
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch(
@@ -2220,7 +2220,7 @@ async def test_register_client_keeps_persisted_client_when_recorded_redirect_uri
 
 
 @pytest.mark.asyncio
-async def test_register_client_non_admin_reuses_persisted_client_despite_redirect_mismatch():
+async def test_register_client_non_admin_reuses_persisted_client_despite_redirect_mismatch() -> None:
     """Callers without replace authority (the public register routes and non-admin users) must
     keep reusing the persisted client even when its recorded redirect_uris mismatch: a spoofable
     forwarded origin must not let any caller re-register and orphan every user's refresh token.
@@ -2261,7 +2261,7 @@ async def test_register_client_non_admin_reuses_persisted_client_despite_redirec
         ),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch.object(global_mcp_server_manager, "update_server", new=mock_update_server),
@@ -2282,7 +2282,7 @@ async def test_register_client_non_admin_reuses_persisted_client_despite_redirec
 
 
 @pytest.mark.asyncio
-async def test_register_client_without_replace_authority_adopts_concurrently_persisted_client(monkeypatch):
+async def test_register_client_without_replace_authority_adopts_concurrently_persisted_client(monkeypatch: pytest.MonkeyPatch) -> None:
     """Two users connect to a fresh config-declared server at once. Both miss the store at reuse
     time and both mint a client upstream, but the loser's insert finds the row taken and must
     adopt the winner's client (which the winner's browser is already authorizing under) instead of
@@ -2317,7 +2317,7 @@ async def test_register_client_without_replace_authority_adopts_concurrently_per
         ),
         patch.object(global_mcp_server_manager, "is_config_declared_server", return_value=True),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
-        patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(return_value=None)),
+        patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(return_value=None)),
         patch("litellm.proxy.mcp_server.db.update_mcp_server", new=AsyncMock(return_value=None)),
         patch(
             "litellm.proxy.mcp_server.db.get_mcp_server_oauth_client_credentials",
@@ -2349,7 +2349,7 @@ async def test_register_client_without_replace_authority_adopts_concurrently_per
 
 
 @pytest.mark.asyncio
-async def test_persist_without_replace_authority_never_overwrites_a_row_client_it_cannot_apply():
+async def test_persist_without_replace_authority_never_overwrites_a_row_client_it_cannot_apply() -> None:
     """A DB-declared server already holds a shared DCR client that this process cannot adopt (it
     was bound to another server URL). A caller without replace authority must get a failure, not
     fall through to update_mcp_server and overwrite the client every signed-in user depends on."""
@@ -2364,7 +2364,7 @@ async def test_persist_without_replace_authority_never_overwrites_a_row_client_i
 
     with (
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
-        patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(return_value=row)),
+        patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(return_value=row)),
         patch("litellm.proxy.mcp_server.db.update_mcp_server", new=mock_update),
     ):
         result = await _persist_dcr_client_registration(
@@ -2477,7 +2477,7 @@ GATEWAY_OWNED_DCR_BODY: Final = {
 
 
 @pytest.mark.asyncio
-async def test_public_register_route_persists_first_dcr_client_when_origin_is_configured(monkeypatch):
+async def test_public_register_route_persists_first_dcr_client_when_origin_is_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """A DB-declared oauth2 server with no client yet gets its first DCR client from whichever
     client connects first, usually a non-admin user's coding tool on the unauthenticated
     /{server}/register route. With PROXY_BASE_URL set the gateway knows its own callback, so that
@@ -2522,7 +2522,7 @@ async def test_public_register_route_persists_first_dcr_client_when_origin_is_co
             ),
             patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
             patch(
-                "litellm.proxy.mcp_server.db.get_mcp_server",
+                "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
                 new=AsyncMock(return_value=persisted_row),
             ),
             patch.object(global_mcp_server_manager, "update_server", new=mock_update_server),
@@ -2543,8 +2543,8 @@ async def test_public_register_route_persists_first_dcr_client_when_origin_is_co
 
 @pytest.mark.asyncio
 async def test_public_register_route_persists_first_dcr_client_for_config_server_and_serves_later_callers(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The customer-visible shape of the bug: a config.yaml-declared DCR server (no
     LiteLLM_MCPServerTable row) whose first connect comes from a non-admin user. The minted client
     must reach the server-scoped OAuth client store, so a token refresh has a client_id and a
@@ -2589,7 +2589,7 @@ async def test_public_register_route_persists_first_dcr_client_for_config_server
             ),
             patch.object(global_mcp_server_manager, "is_config_declared_server", return_value=True),
             patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
-            patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(return_value=None)),
+            patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(return_value=None)),
             patch("litellm.proxy.mcp_server.db.update_mcp_server", new=AsyncMock(return_value=None)),
             patch(
                 "litellm.proxy.mcp_server.db.get_mcp_server_oauth_client_credentials",
@@ -2619,7 +2619,7 @@ async def test_public_register_route_persists_first_dcr_client_for_config_server
 
 
 @pytest.mark.asyncio
-async def test_public_register_route_without_configured_origin_does_not_pin_the_shared_client(monkeypatch):
+async def test_public_register_route_without_configured_origin_does_not_pin_the_shared_client(monkeypatch: pytest.MonkeyPatch) -> None:
     """Without PROXY_BASE_URL the callback comes from the request's own Host, which an anonymous
     caller can forge, so the public route keeps today's behavior: register for this caller with
     the body it sent, echo the upstream response, and persist nothing. An admin's Connect (or
@@ -2655,7 +2655,7 @@ async def test_public_register_route_without_configured_origin_does_not_pin_the_
             ),
             patch.object(global_mcp_server_manager, "is_config_declared_server", return_value=True),
             patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
-            patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(return_value=None)),
+            patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(return_value=None)),
             patch("litellm.proxy.mcp_server.db.update_mcp_server", new=mock_update),
             patch(
                 "litellm.proxy.mcp_server.db.get_mcp_server_oauth_client_credentials",
@@ -6159,7 +6159,7 @@ async def test_authorize_clientless_bridge_loads_shared_client_before_choosing_t
             return_value=prisma_client,
         ),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch.object(
@@ -6217,7 +6217,7 @@ async def test_token_clientless_bridge_loads_shared_client_before_choosing_the_a
     with (
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=prisma_client),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch.object(
@@ -6312,7 +6312,7 @@ async def test_token_sealed_ephemeral_client_is_not_replaced_by_persisted_gatewa
             return_value=prisma_client,
         ),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=mock_get_mcp_server,
         ),
         patch.object(
@@ -9859,7 +9859,7 @@ async def test_token_exchange_unreadable_body_still_renders_oauth_fault():
 
 
 @pytest.mark.asyncio
-async def test_persist_dcr_client_for_config_server_uses_side_store():
+async def test_persist_dcr_client_for_config_server_uses_side_store() -> None:
     """A config.yaml-declared OAuth2 DCR server has no LiteLLM_MCPServerTable row, so
     update_mcp_server returns None. The minted client must then persist to the server-scoped
     OAuth-client store keyed by server_id (never a shadow server row), overlay onto the in-memory
@@ -9899,7 +9899,7 @@ async def test_persist_dcr_client_for_config_server_uses_side_store():
             new=AsyncMock(return_value=None),
         ),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=AsyncMock(return_value=None),
         ),
         patch(
@@ -10000,7 +10000,7 @@ async def test_hydrate_config_server_applies_stored_dcr_client(monkeypatch, lega
 
 
 @pytest.mark.asyncio
-async def test_reuse_config_server_reads_store_with_real_crypto(monkeypatch):
+async def test_reuse_config_server_reads_store_with_real_crypto(monkeypatch: pytest.MonkeyPatch) -> None:
     """A config-declared server (rowless) keeps its DCR client in the store, so the reuse read
     resolves it from the store and decrypts the encrypted-at-rest client, mirroring the write path so
     a re-authorize reuses the client instead of re-minting one."""
@@ -10045,7 +10045,7 @@ async def test_reuse_config_server_reads_store_with_real_crypto(monkeypatch):
     with (
         patch.object(global_mcp_server_manager, "is_config_declared_server", return_value=True),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
-        patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(return_value=None)),
+        patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(return_value=None)),
         patch(
             "litellm.proxy.mcp_server.db.get_mcp_server_oauth_client_credentials",
             new=store_lookup,
@@ -10059,7 +10059,7 @@ async def test_reuse_config_server_reads_store_with_real_crypto(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_temp_server_is_not_persisted_to_store():
+async def test_temp_server_is_not_persisted_to_store() -> None:
     """A rowless server that is NOT config-declared (a throwaway /server/oauth/session server) must
     not leave a permanent store row on persist, and the read must never consult the store for it. Its
     minted client is overlaid in memory for the session only."""
@@ -10091,7 +10091,7 @@ async def test_temp_server_is_not_persisted_to_store():
         patch.object(global_mcp_server_manager, "is_config_declared_server", return_value=False),
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch("litellm.proxy.mcp_server.db.update_mcp_server", new=AsyncMock(return_value=None)),
-        patch("litellm.proxy.mcp_server.db.get_mcp_server", new=AsyncMock(return_value=None)),
+        patch("litellm.proxy.mcp_server.db.get_mcp_server_without_profiles", new=AsyncMock(return_value=None)),
         patch("litellm.proxy.mcp_server.db.upsert_mcp_server_oauth_client_credentials", new=upsert),
         patch(
             "litellm.proxy.mcp_server.db.get_mcp_server_oauth_client_credentials",
@@ -10155,7 +10155,7 @@ async def test_hydrate_does_not_overwrite_explicit_config_client_id():
 
 
 @pytest.mark.asyncio
-async def test_reuse_does_not_inherit_store_client_when_a_row_exists():
+async def test_reuse_does_not_inherit_store_client_when_a_row_exists() -> None:
     """Security: a server that HAS a LiteLLM_MCPServerTable row reads its DCR client only from that
     row, never from the server-scoped store. server_id is caller-settable on create, so a submitted
     server whose id collides with a config-declared server must not be able to load that config
@@ -10185,7 +10185,7 @@ async def test_reuse_does_not_inherit_store_client_when_a_row_exists():
     with (
         patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
         patch(
-            "litellm.proxy.mcp_server.db.get_mcp_server",
+            "litellm.proxy.mcp_server.db.get_mcp_server_without_profiles",
             new=AsyncMock(return_value=row_without_client),
         ),
         patch(
@@ -14437,7 +14437,7 @@ async def test_registration_without_database_keeps_client_in_temporary_server(mo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("config_store", [False, True])
-async def test_registration_does_not_overwrite_credentials_after_failed_identity_read(monkeypatch, config_store):
+async def test_registration_does_not_overwrite_credentials_after_failed_identity_read(monkeypatch: pytest.MonkeyPatch, config_store: bool) -> None:
     from litellm.proxy import utils
     from litellm.proxy.mcp_server import db
     from litellm.proxy.mcp_server import discoverable_endpoints as endpoints
@@ -14447,7 +14447,7 @@ async def test_registration_does_not_overwrite_credentials_after_failed_identity
     monkeypatch.setattr(utils, "get_prisma_client_or_throw", lambda _: MagicMock())
     monkeypatch.setattr(
         db,
-        "get_mcp_server",
+        "get_mcp_server_without_profiles",
         AsyncMock(return_value=None, side_effect=None if config_store else RuntimeError("unavailable")),
     )
     monkeypatch.setattr(
@@ -14469,7 +14469,7 @@ async def test_registration_does_not_overwrite_credentials_after_failed_identity
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("winner_available", [False, True])
-async def test_registration_losing_conditional_write_reuses_only_a_matching_winner(monkeypatch, winner_available):
+async def test_registration_losing_conditional_write_reuses_only_a_matching_winner(monkeypatch: pytest.MonkeyPatch, winner_available: bool) -> None:
     from litellm.proxy import utils
     from litellm.proxy._types import LiteLLM_MCPServerTable
     from litellm.proxy.mcp_server import db
@@ -14492,7 +14492,7 @@ async def test_registration_losing_conditional_write_reuses_only_a_matching_winn
     )
     monkeypatch.setattr(utils, "get_prisma_client_or_throw", lambda _: MagicMock())
     read = AsyncMock(side_effect=[row, winner])
-    monkeypatch.setattr(db, "get_mcp_server", read)
+    monkeypatch.setattr(db, "get_mcp_server_without_profiles", read)
     monkeypatch.setattr(endpoints, "_refresh_persisted_dcr_server", AsyncMock())
     update = AsyncMock(return_value=None)
     monkeypatch.setattr(db, "update_mcp_server", update)
@@ -15604,3 +15604,72 @@ def test_root_metadata_owned_by_a_resolved_oauth2_server_never_lists_the_gateway
     assert JWT_BEARER_GRANT_TYPE not in document["grant_types_supported"]
     assert document["grant_types_supported"] == ["authorization_code", "refresh_token"]
     assert document["token_endpoint_auth_methods_supported"] == ["client_secret_post"]
+
+
+def _dcr_refresh_row() -> LiteLLM_MCPServerTable:
+    from litellm.proxy._types import MCPTransport
+
+    return LiteLLM_MCPServerTable(
+        server_id="dcr-server",
+        url="https://example.com/mcp",
+        transport=MCPTransport.http,
+        updated_at=datetime(2026, 11, 18, tzinfo=timezone.utc),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile_ids", [(), ("dcr-bots",)])
+async def test_a_dcr_refresh_of_an_unchanged_row_keeps_the_profiles_the_catalog_read_without_reading_them(
+    profile_ids: tuple[str, ...],
+) -> None:
+    from litellm.proxy.mcp_server.discoverable_endpoints import (
+        _refresh_persisted_dcr_server,  # pyright: ignore[reportPrivateUsage]  # the refresh is the unit under test
+    )
+    from litellm.proxy.mcp_server.mcp_server_manager import global_mcp_server_manager
+    from litellm.types.mcp_server.mcp_server_manager import MCPAuthProfile
+
+    persisted: Final = _dcr_refresh_row()
+    read: Final = tuple(
+        MCPAuthProfile(id=profile_id, auth_type=MCPAuth.bearer_token, authentication_token="bot-token")
+        for profile_id in profile_ids
+    )
+    with (
+        patch.object(global_mcp_server_manager.catalog, "read_profiles_of", return_value=read) as read_of,
+        patch.object(global_mcp_server_manager, "update_server", new=AsyncMock()) as update_server,
+        patch(
+            "litellm.proxy.mcp_server.auth_profile_db.with_stored_profiles",
+            new=AsyncMock(side_effect=AssertionError("no profile-table read for an unchanged row")),
+        ),
+    ):
+        await _refresh_persisted_dcr_server(persisted)
+
+    read_of.assert_called_once_with("dcr-server", persisted.updated_at)
+    assert update_server.await_args is not None
+    refreshed: Final = update_server.await_args.args[0]
+    assert tuple(profile.id for profile in refreshed.additional_auth or ()) == profile_ids
+
+
+@pytest.mark.asyncio
+async def test_a_dcr_refresh_of_a_row_the_catalog_has_not_read_reads_its_profiles() -> None:  # test-quality-ok: the record handed to the registry is what the refresh produces
+    from litellm.proxy.mcp_server.discoverable_endpoints import (
+        _refresh_persisted_dcr_server,  # pyright: ignore[reportPrivateUsage]  # the refresh is the unit under test
+    )
+    from litellm.proxy.mcp_server.mcp_server_manager import global_mcp_server_manager
+    from litellm.types.mcp_server.mcp_server_manager import MCPAuthProfile
+
+    persisted: Final = _dcr_refresh_row()
+    bots: Final = MCPAuthProfile(id="dcr-bots", auth_type=MCPAuth.bearer_token, authentication_token="bot-token")
+    with (
+        patch.object(global_mcp_server_manager.catalog, "read_profiles_of", return_value=None),
+        patch.object(global_mcp_server_manager, "update_server", new=AsyncMock()) as update_server,
+        patch("litellm.proxy.utils.get_prisma_client_or_throw", return_value=MagicMock()),
+        patch(
+            "litellm.proxy.mcp_server.auth_profile_db.with_stored_profiles",
+            new=AsyncMock(return_value=persisted.model_copy(update={"additional_auth": (bots,)})),
+        ) as read_profiles,
+    ):
+        await _refresh_persisted_dcr_server(persisted)
+
+    read_profiles.assert_awaited_once()
+    assert update_server.await_args is not None
+    assert update_server.await_args.args[0].additional_auth == (bots,)

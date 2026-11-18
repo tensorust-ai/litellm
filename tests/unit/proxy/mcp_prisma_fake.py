@@ -290,3 +290,64 @@ class _LaggingReplica:
         transaction: Final = self._writer.tx()
         transaction.litellm_mcpauthprofiletable = self._writer.litellm_mcpauthprofiletable
         return transaction
+
+
+class _GrantTeamTable:
+    def __init__(self, store: "FakeGrantPrisma") -> None:
+        self._store = store
+
+    async def find_unique(
+        self, where: Mapping[str, object], include: Mapping[str, object] | None = None
+    ) -> FakeRow | None:
+        self._store.reads.append("team")
+        permission_id: Final = self._store.teams.get(str(where["team_id"]))
+        return None if permission_id is None else FakeRow(team_id=where["team_id"], object_permission_id=permission_id)
+
+
+class _GrantPermissionTable:
+    def __init__(self, store: "FakeGrantPrisma") -> None:
+        self._store = store
+
+    async def find_unique(self, where: Mapping[str, object]) -> FakeRow | None:
+        self._store.reads.append("permission")
+        if self._store.permission_reads_fail:
+            raise ConnectionError("permission table unreachable")
+        permission_id: Final = str(where["object_permission_id"])
+        grants: Final = self._store.permissions.get(permission_id)
+        return (
+            None
+            if grants is None
+            else FakeRow(
+                object_permission_id=permission_id,
+                mcp_auth_profiles=list(grants),
+                mcp_servers=list(self._store.servers.get(permission_id, ())),
+            )
+        )
+
+
+class _NoToolsetTable:
+    async def find_many(self, where: Mapping[str, object]) -> Sequence[FakeRow]:
+        return []
+
+
+class _GrantDb:
+    def __init__(self, store: "FakeGrantPrisma") -> None:
+        self.litellm_teamtable = _GrantTeamTable(store)
+        self.litellm_objectpermissiontable = _GrantPermissionTable(store)
+        self.litellm_mcptoolsettable = _NoToolsetTable()
+
+
+class FakeGrantPrisma:
+    def __init__(
+        self,
+        teams: Mapping[str, str],
+        permissions: Mapping[str, Sequence[str]],
+        servers: Mapping[str, Sequence[str]] | None = None,
+    ) -> None:
+        self.teams = teams
+        self.permissions = permissions
+        self.servers: Mapping[str, Sequence[str]] = servers or {}
+        self.permission_reads_fail = False
+        self.reads: list[str] = []
+        self.db = _GrantDb(self)
+        self.writer_db = self.db

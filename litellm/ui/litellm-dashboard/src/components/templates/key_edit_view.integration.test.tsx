@@ -188,6 +188,8 @@ const optionByContent = (label: string): HTMLElement | undefined =>
   visibleOptions().find((el) => el.textContent === label);
 
 describe("KeyEditView", () => {
+  const anyServerList = expect.toBeOneOf([undefined, expect.any(Array)]);
+
   const MOCK_KEY_DATA: KeyResponse = {
     token: "test-token-123",
     token_id: "test-token-123",
@@ -315,6 +317,7 @@ describe("KeyEditView", () => {
             }),
           }),
           expect.any(Array),
+          anyServerList,
         );
       });
     });
@@ -336,6 +339,7 @@ describe("KeyEditView", () => {
             }),
           }),
           expect.any(Array),
+          anyServerList,
         );
       });
     });
@@ -666,6 +670,7 @@ describe("KeyEditView", () => {
       expect(onSubmitMock).toHaveBeenCalledWith(
         expect.objectContaining({ throttle_on_budget_exceeded: true }),
         expect.any(Array),
+        anyServerList,
       );
     });
   });
@@ -699,6 +704,7 @@ describe("KeyEditView", () => {
       expect(onSubmitMock).toHaveBeenCalledWith(
         expect.objectContaining({ enable_prompt_caching: true }),
         expect.any(Array),
+        anyServerList,
       );
     });
   });
@@ -1072,7 +1078,9 @@ describe("KeyEditView", () => {
       metadata: JSON.stringify({ note: "new" }, null, 2),
       vector_stores: ["store-new"],
     };
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining(expected), expect.any(Array)));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining(expected), expect.any(Array), anyServerList),
+    );
     const [, dirtyFields] = onSubmit.mock.calls[0];
     expect(dirtyFields).toContain("max_budget");
     expect(dirtyFields).not.toContain("rpm_limit");
@@ -1175,7 +1183,11 @@ describe("KeyEditView", () => {
     await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ max_budget: 25 }), expect.any(Array)),
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ max_budget: 25 }),
+        expect.any(Array),
+        anyServerList,
+      ),
     );
   });
 
@@ -1202,7 +1214,11 @@ describe("KeyEditView", () => {
     await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ max_budget: 25 }), expect.any(Array)),
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ max_budget: 25 }),
+        expect.any(Array),
+        anyServerList,
+      ),
     );
   });
 
@@ -1875,6 +1891,38 @@ describe("KeyEditView", () => {
       expect(selector).toHaveAttribute("data-user-id", "owner-7");
     });
 
+    it("labels a team key's empty auth profile choice as following the team", async () => {
+      vi.mocked(fetchMCPServers).mockResolvedValue([
+        {
+          server_id: "srv-a",
+          server_name: "team-wiki",
+          url: "https://srv-a.example",
+          transport: "http",
+          auth_type: "none",
+          additional_auth: [{ id: "wiki-bots", auth_type: "api_key" }],
+          created_at: "",
+          created_by: "",
+          updated_at: "",
+          updated_by: "",
+        },
+      ]);
+      testQueryClient.clear();
+      renderWithProviders(
+        <KeyEditView
+          keyData={{ ...MOCK_KEY_DATA, team_id: "group-maple" }}
+          onCancel={() => {}}
+          onSubmit={vi.fn()}
+          accessToken=""
+          userID=""
+          userRole="Admin"
+          premiumUser={false}
+        />,
+      );
+
+      expect(await screen.findByLabelText("team-wiki")).toHaveTextContent("None (team or default)");
+      vi.mocked(fetchMCPServers).mockResolvedValue([]);
+    });
+
     it("keeps a saved MCP grant editable when it falls outside the key's team scope", async () => {
       const server = (server_id: string, server_name: string) => ({
         server_id,
@@ -1912,6 +1960,45 @@ describe("KeyEditView", () => {
       vi.mocked(fetchMCPServers).mockResolvedValue([]);
     });
 
+    it("keeps the auth profile control of a server granted only to the key and saves against the same list", async () => {
+      const keyServer = {
+        server_id: "srv-key",
+        server_name: "key-wiki",
+        url: "https://srv-key.example",
+        transport: "http",
+        auth_type: "none",
+        additional_auth: [{ id: "key-bots", auth_type: "api_key" }],
+        created_at: "",
+        created_by: "",
+        updated_at: "",
+        updated_by: "",
+      };
+      vi.mocked(fetchMCPServers).mockImplementation(async (_token, teamId) => (teamId ? [] : [keyServer]));
+      testQueryClient.clear();
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      renderWithProviders(
+        <KeyEditView
+          keyData={{
+            ...MOCK_KEY_DATA,
+            team_id: "group-maple",
+            object_permission: { mcp_servers: ["srv-key"], mcp_auth_profiles: ["key-bots"] },
+          }}
+          onCancel={() => {}}
+          onSubmit={onSubmit}
+          accessToken=""
+          userID=""
+          userRole="Admin"
+          premiumUser={false}
+        />,
+      );
+
+      expect(await screen.findByLabelText("key-wiki")).toHaveTextContent("key-bots");
+      await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][2]).toEqual([keyServer]);
+      vi.mocked(fetchMCPServers).mockResolvedValue([]);
+    });
+
     it("rescopes the MCP server selector and drops stale MCP grants when the team is changed before saving", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       renderWithProviders(
@@ -1920,7 +2007,11 @@ describe("KeyEditView", () => {
             ...MOCK_KEY_DATA,
             organization_id: "org-1",
             team_id: "group-maple",
-            object_permission: { mcp_servers: ["srv-a"], mcp_tool_permissions: { "srv-a": ["read"] } },
+            object_permission: {
+              mcp_servers: ["srv-a"],
+              mcp_tool_permissions: { "srv-a": ["read"] },
+              mcp_auth_profiles: ["maple-bots"],
+            },
           }}
           onCancel={() => {}}
           onSubmit={onSubmit}
@@ -1949,6 +2040,7 @@ describe("KeyEditView", () => {
       expect(onSubmit.mock.calls[0][0]).toMatchObject({
         mcp_servers_and_groups: { servers: [], accessGroups: [], toolsets: [] },
         mcp_tool_permissions: {},
+        mcp_auth_profiles: [],
       });
     });
 
@@ -2018,6 +2110,7 @@ describe("KeyEditView", () => {
         expect(onSubmit).toHaveBeenCalledWith(
           expect.objectContaining({ organization_id: null, team_id: null }),
           expect.any(Array),
+          anyServerList,
         );
       });
       expect(JSON.parse(JSON.stringify(onSubmit.mock.calls[0][0]))).toMatchObject({
@@ -2064,7 +2157,11 @@ describe("KeyEditView", () => {
       await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
       const expectedDetach = { project_id: null, organization_id: "org-1", team_id: "group-maple", models: key.models };
       await waitFor(() =>
-        expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining(expectedDetach), expect.any(Array)),
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining(expectedDetach),
+          expect.any(Array),
+          anyServerList,
+        ),
       );
       expect(screen.getByRole("combobox", { name: "Team" })).toBeDisabled();
       view.rerender(<></>);
@@ -2368,6 +2465,7 @@ describe("KeyEditView", () => {
         expect(onSubmit).toHaveBeenCalledWith(
           expect.objectContaining({ end_user_budget_id: "svc-b-budget" }),
           expect.any(Array),
+          anyServerList,
         );
       });
     });
@@ -2380,7 +2478,11 @@ describe("KeyEditView", () => {
       await save();
 
       await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ end_user_budget_id: "" }), expect.any(Array));
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ end_user_budget_id: "" }),
+          expect.any(Array),
+          anyServerList,
+        );
       });
     });
 
@@ -3035,6 +3137,7 @@ describe("KeyEditView", () => {
         expect(onSubmitMock).toHaveBeenCalledWith(
           expect.objectContaining({ team_id: null, organization_id: "org-1" }),
           expect.any(Array),
+          anyServerList,
         );
       });
     });

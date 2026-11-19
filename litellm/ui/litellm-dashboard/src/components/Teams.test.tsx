@@ -25,14 +25,31 @@ vi.mock("./mcp_server_management/MCPServerSelector", () => ({
   }: {
     onChange: (selection: { servers: string[]; accessGroups: string[]; toolsets: string[] }) => void;
   }) => (
-    <button
-      type="button"
-      data-testid="select-mcp-toolset"
-      onClick={() => onChange({ servers: [], accessGroups: [], toolsets: ["ts-1"] })}
-    >
-      Select MCP toolset
-    </button>
+    <>
+      <button
+        type="button"
+        data-testid="select-mcp-toolset"
+        onClick={() => onChange({ servers: [], accessGroups: [], toolsets: ["ts-1"] })}
+      >
+        Select MCP toolset
+      </button>
+      <button
+        type="button"
+        data-testid="select-mcp-server"
+        onClick={() => onChange({ servers: ["srv-1"], accessGroups: [], toolsets: [] })}
+      >
+        Select MCP server
+      </button>
+    </>
   ),
+}));
+
+vi.mock("@/app/(dashboard)/hooks/mcpServers/useMCPServers", () => ({
+  useMCPServers: () => ({
+    data: [
+      { server_id: "srv-1", server_name: "deploy", additional_auth: [{ id: "deploy-bots", auth_type: "api_key" }] },
+    ],
+  }),
 }));
 
 vi.mock("./skills/SkillSelector", () => ({
@@ -1400,6 +1417,40 @@ describe("Teams - the exact bytes the create call sends", () => {
     const payload = await submit();
 
     expect(payload.object_permission).toStrictEqual({ mcp_toolsets: ["ts-1"] });
+  });
+
+  it("sends the chosen auth profile of a selected server in object_permission", async () => {
+    await openCreateModal();
+    await openSection("MCP Settings", /Allowed MCP Servers/);
+    fireEvent.click(screen.getByTestId("select-mcp-server"));
+    await userEvent.click(await screen.findByLabelText("deploy"));
+    await userEvent.click(await screen.findByRole("option", { name: "deploy-bots" }));
+
+    const payload = await submit();
+
+    expect(payload.object_permission).toStrictEqual({ mcp_servers: ["srv-1"], mcp_auth_profiles: ["deploy-bots"] });
+    expect(payload).not.toHaveProperty("mcp_auth_profiles");
+  });
+
+  it("sends an auth profile chosen without selecting its server", async () => {
+    await openCreateModal();
+    await openSection("MCP Settings", /Allowed MCP Servers/);
+    await userEvent.click(await screen.findByLabelText("deploy"));
+    await userEvent.click(await screen.findByRole("option", { name: "deploy-bots" }));
+
+    const payload = await submit();
+
+    expect(payload.object_permission).toStrictEqual({ mcp_auth_profiles: ["deploy-bots"] });
+  });
+
+  it("sends no auth profile key when a server is selected and the default profile is kept", async () => {
+    await openCreateModal();
+    await openSection("MCP Settings", /Allowed MCP Servers/);
+    fireEvent.click(screen.getByTestId("select-mcp-server"));
+
+    const payload = await submit();
+
+    expect(payload.object_permission).toStrictEqual({ mcp_servers: ["srv-1"] });
   });
 
   it.each([

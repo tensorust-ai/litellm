@@ -66,7 +66,12 @@ vi.mock("@/app/(dashboard)/hooks/accessGroups/useAccessGroups", () => ({
   useAccessGroups: () => ({ data: state.accessGroups, isLoading: false, isError: false }),
 }));
 vi.mock("@/app/(dashboard)/hooks/mcpServers/useMCPServers", () => ({
-  useMCPServers: () => ({ data: [], isLoading: false }),
+  useMCPServers: () => ({
+    data: [
+      { server_id: "srv-1", server_name: "deploy", additional_auth: [{ id: "deploy-bots", auth_type: "api_key" }] },
+    ],
+    isLoading: false,
+  }),
 }));
 vi.mock("@/app/(dashboard)/hooks/mcpServers/useMCPAccessGroups", () => ({
   useMCPAccessGroups: () => ({ data: [], isLoading: false }),
@@ -1350,6 +1355,39 @@ describe("CreateKey", () => {
       const payload = await createdPayload();
       expect(payload).not.toHaveProperty("mcp_tool_permissions");
       expect(payload).toHaveProperty("allowed_mcp_servers_and_groups");
+    });
+
+    it("sends the auth profile chosen for a selected MCP server inside object_permission", async () => {
+      await openModal();
+      await nameTheKey();
+      await openSection(/Optional Settings/i);
+      await openSection(SECTIONS.mcp);
+      await userEvent.click(await screen.findByRole("combobox", { name: /MCP Servers/i }));
+      await userEvent.click(await screen.findByRole("option", { name: /deploy \(srv-1\)/ }));
+      await userEvent.click(await screen.findByLabelText("deploy"));
+      await userEvent.click(await screen.findByRole("option", { name: "deploy-bots" }));
+      await submit();
+
+      const payload = await createdPayload();
+      expect(payload.object_permission).toStrictEqual({ mcp_servers: ["srv-1"], mcp_auth_profiles: ["deploy-bots"] });
+      expect(payload).not.toHaveProperty("mcp_auth_profiles");
+    });
+
+    it("drops an auth profile chosen before the team changed", async () => {
+      state.teams = [{ team_id: "team-1", team_alias: "Team One", models: [] }];
+      await openModal({ teams: state.teams as unknown as Team[] });
+      await nameTheKey();
+      await openSection(/Optional Settings/i);
+      await openSection(SECTIONS.mcp);
+      await userEvent.click(await screen.findByLabelText("deploy"));
+      await userEvent.click(await screen.findByRole("option", { name: "deploy-bots" }));
+      await userEvent.click(await screen.findByLabelText("Team"));
+      await userEvent.click(await screen.findByRole("option", { name: /Team One/ }));
+      expect(screen.getByLabelText("deploy")).toHaveTextContent("None (team or default)");
+      await submit();
+
+      const payload = await createdPayload();
+      expect(payload.object_permission ?? {}).not.toHaveProperty("mcp_auth_profiles");
     });
 
     it("registers no Optional Settings field while a team choice is still required", async () => {

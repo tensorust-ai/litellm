@@ -75,7 +75,10 @@ import {
   hasAllModelsSentinel,
 } from "../key_team_helpers/fetch_available_models_team_key";
 import { Team } from "../key_team_helpers/key_list";
+import type { MCPServer } from "../mcp_tools/types";
 import MCPServerSelector from "../mcp_server_management/MCPServerSelector";
+import McpAuthProfilePicker from "../mcp_server_management/McpAuthProfilePicker";
+import { useMCPServers } from "@/app/(dashboard)/hooks/mcpServers/useMCPServers";
 import MCPToolPermissions from "../mcp_server_management/MCPToolPermissions";
 import { toast } from "@/lib/toast";
 import {
@@ -185,6 +188,24 @@ const McpToolPermissionsField: React.FC<McpToolPermissionsFieldProps> = ({ acces
     </div>
   );
 };
+
+interface McpAuthProfilesFieldProps {
+  readonly teamId: string | null;
+  readonly servers: readonly MCPServer[] | undefined;
+}
+
+const McpAuthProfilesField: React.FC<McpAuthProfilesFieldProps> = ({ teamId, servers }) => (
+  <MountedFormField name="mcp_auth_profiles" bare>
+    {(field) => (
+      <McpAuthProfilePicker
+        value={field.value as readonly string[] | undefined}
+        onChange={field.onChange}
+        servers={servers}
+        followsTeam={teamId !== null}
+      />
+    )}
+  </MountedFormField>
+);
 
 /**
  * Interface for pre-filling the create key form from URL parameters
@@ -339,9 +360,14 @@ const CreateKey: React.FC<CreateKeyProps> = ({ team, teams, data, addKey, autoOp
   const ownerLimitedToTeamMembers = keyOwner === "another_user" && ownerScope === "team_members";
   const memberOwnerOptions = teamMemberOwnerOptions(selectedCreateKeyTeam, userID);
   const createKeyOwner = form.watch("user_id");
+  const { data: mcpServers } = useMCPServers(
+    selectedCreateKeyTeam?.team_id ?? null,
+    typeof createKeyOwner === "string" ? createKeyOwner : null,
+  );
   useEffect(() => {
     form.setValue("allowed_mcp_servers_and_groups", { servers: [], accessGroups: [] });
     form.setValue("mcp_tool_permissions", {});
+    form.setValue("mcp_auth_profiles", undefined);
   }, [createKeyOwner, form]);
   const ownerRequiresTeam = keyOwner === "service_account" || ownerLimitedToTeamMembers;
   const handleCancel = () => {
@@ -503,6 +529,7 @@ const CreateKey: React.FC<CreateKeyProps> = ({ team, teams, data, addKey, autoOp
         modelMaxBudget,
         tagRateLimits,
         budgetFallbacks,
+        mcpServers,
       };
       const built = buildKeyCreatePayload(input);
       if (built.kind === "duplicate_alias") {
@@ -591,6 +618,7 @@ const CreateKey: React.FC<CreateKeyProps> = ({ team, teams, data, addKey, autoOp
     // Clear MCP server selection when team changes (available servers may differ)
     form.setValue("allowed_mcp_servers_and_groups", { servers: [], accessGroups: [] });
     form.setValue("mcp_tool_permissions", {});
+    form.setValue("mcp_auth_profiles", undefined);
   }, [selectedCreateKeyTeam, selectedProjectId, accessToken, userID, userRole, form]);
 
   // Apply deferred model prefill once the available model list arrives.
@@ -1727,6 +1755,8 @@ const CreateKey: React.FC<CreateKeyProps> = ({ team, teams, data, addKey, autoOp
                             control={form.control}
                             setValue={form.setValue}
                           />
+
+                          <McpAuthProfilesField teamId={selectedCreateKeyTeam?.team_id ?? null} servers={mcpServers} />
                         </CollapsibleContent>
                       </Collapsible>
 
